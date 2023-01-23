@@ -90,14 +90,15 @@ public class Server extends Thread {
 		if(request == null)
 			return;
 		
-		var httpVersion = request[0];
+		var method = request[0];
 		var resource = request[1];
-		var session = new Session(client, request[2]);
-		if(!resource.startsWith("/")) {
+		var httpVersion = request[2];
+		var session = new Session(client, httpVersion);
+		if(!resource.startsWith("/") || !method.matches("[A-Z]+")) {
 			session.sendStatus(HttpStatus.BAD_REQUEST);
 			session.complete();
 			logger.log(Level.WARNING, 
-					"[" + client.getInetAddress().getHostAddress() + "] < Bad request: " + resource);
+					"[" + client.getInetAddress().getHostAddress() + "] < Bad request");
 			return;
 		}
 		
@@ -106,7 +107,7 @@ public class Server extends Thread {
 		getRoute(resource)
 			.orElseGet(() -> (m,r,s) -> s.sendStatus(HttpStatus.NOT_FOUND))
 			.handle(
-				httpVersion,
+				method,
 				resource,
 				session
 			);

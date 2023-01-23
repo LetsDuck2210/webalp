@@ -7,7 +7,7 @@ import java.util.function.Supplier;
 
 public class FileUtil {
 	public static String sanitize(String path) {
-		return path.replaceAll("([^a-zA-Z0-9.\\-]|\\.\\.)", "_");
+		return path.replaceAll("([^a-zA-Z0-9.\\-\\/]|\\.\\.)", "_");
 	}
 	public static String loadTemplate(String file, Map<String, Supplier<String>> vars) throws IOException {
 		var reader = new FileReader(file);
