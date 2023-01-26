@@ -40,6 +40,7 @@ public class Main {
 			getLogger().log(Level.WARNING, "Requires 3 arguments: <port> <username> <password>");
 			return;
 		}
+		((DefaultLogger) getLogger()).setLevel(Level.INFO);
 		
 		username = args[1];
 		password = args[2];
@@ -69,18 +70,34 @@ public class Main {
 		session.sendBody(FileUtil.loadTemplate("frontend" + resource, vars));
 	}
 	
+	private static String lastURL;	// the url when it was last updated
+	private static long lastUpdate;	// millis since 00:00 Jan 1, 1970
+	private static final long UPDATE_DELAY = 40_000_000; // update about twice a day
 	public static Optional<String> fetchStreamURL() {
-		getLogger().log(Level.INFO, "--- begin fetchStreamURL ---");
+		getLogger().log(Level.DEBUG, 
+				"url requested at: " + System.currentTimeMillis() 
+						+ ",\n\t last: " + lastUpdate 
+						+ ",\n\t dif: " + (System.currentTimeMillis() - lastUpdate)
+						+ ",\n\t last url: " + lastURL);
+		if(System.currentTimeMillis() - lastUpdate < UPDATE_DELAY
+				&& lastURL != null && !lastURL.isBlank()) {
+			getLogger().log(Level.INFO, "using last url: " + lastURL);
+			return Optional.of(lastURL);
+		}
+		
+		lastUpdate = System.currentTimeMillis();
+		
+		getLogger().log(Level.DEBUG, "--- begin fetchStreamURL ---");
 		try {
 			var doc = Jsoup.connect("https://iptv.nak.org/public/login").get();
 
-			getLogger().log(Level.INFO, "> searching csrf-token");
+			getLogger().log(Level.DEBUG, "> searching csrf-token");
 			var csrf = doc
 				.selectFirst("form")
 				.getElementsByAttributeValue("type", "hidden")
 				.get(0)
 				.attr("value");
-			getLogger().log(Level.INFO, "* found csrf(" + csrf.length() + "): " + csrf);
+			getLogger().log(Level.DEBUG, "* found csrf(" + csrf.length() + "): " + csrf);
 			
 			var client = HttpClients.createDefault();
 			var post = new HttpPost("https://iptv.nak.org/public/login");
@@ -91,7 +108,7 @@ public class Main {
 			};
 			post.setEntity(new UrlEncodedFormEntity(List.of(postData)));
 			
-			getLogger().log(Level.INFO, "> executing post request");
+			getLogger().log(Level.DEBUG, "> executing post request");
 
 			@SuppressWarnings("deprecation")
 			var response = client.execute(post);
@@ -99,7 +116,7 @@ public class Main {
 			if(response.getEntity() != null) {
 				String res = "";
 				String streamURL;
-				getLogger().log(Level.INFO, "> reading html-response");
+				getLogger().log(Level.DEBUG, "> reading html-response");
 				try(var in = 
 						new BufferedReader( 
 							new InputStreamReader( response.getEntity().getContent() ))) {
@@ -113,22 +130,23 @@ public class Main {
 					return Optional.empty();
 				}
 				var eventURL = btn.attr("href");
-				getLogger().log(Level.INFO, "* found event url: " + eventURL);
+				getLogger().log(Level.DEBUG, "* found event url: " + eventURL);
 				// format: /events/eventID_0/view/eventID_1
 				if(eventURL.contains("/events/")) {
 					var eventIDs = eventURL.substring("/events/".length()).split("\\/view\\/");
-					getLogger().log(Level.INFO, "* found event ids(" + eventIDs.length + "):");
+					getLogger().log(Level.DEBUG, "* found event ids(" + eventIDs.length + "):");
 					for(var eventID : eventIDs)
-						getLogger().log(Level.INFO, eventID);
+						getLogger().log(Level.DEBUG, eventID);
 	
 					if(eventIDs.length == 2) {
 						var url = "https://stream1.nac-cdn.org/poster/" + eventIDs[0] + "/" + eventIDs[1] + "/high/index.m3u8";
-						getLogger().log(Level.INFO, "* found url(" + url.length() + "): " + url + "\n --- complete ---");
+						getLogger().log(Level.DEBUG, "* found url(" + url.length() + "): " + url + "\n --- complete ---");
+						lastURL = url;
 						return Optional.of(url);
 					}
 				}
 				
-				getLogger().log(Level.INFO, "> searching stream url in html-response(" + res.length() + ")");
+				getLogger().log(Level.DEBUG, "> searching stream url in html-response(" + res.length() + ")");
 				var streamURLPattern = Pattern.compile("https:\\/\\/stream\\d\\.nac-cdn\\.org\\/poster\\/([a-fA-F0-9-]+\\/){2}high\\/index\\.m3u8");
 				
 				var matcher = streamURLPattern.matcher(res);
@@ -139,8 +157,9 @@ public class Main {
 				}
 				
 				streamURL = res.substring(matcher.start(), matcher.end());
-				getLogger().log(Level.INFO, "--- complete ---");
-				getLogger().log(Level.INFO, "* found url(" + streamURL.length() + "): " + streamURL);
+				getLogger().log(Level.DEBUG, "--- complete ---");
+				getLogger().log(Level.DEBUG, "* found url(" + streamURL.length() + "): " + streamURL);
+				lastURL = streamURL;
 				return Optional.of(streamURL);
 			} else
 				getLogger().log(Level.WARNING, "* could not create response-entity");

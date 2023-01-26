@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.PatternSyntaxException;
 
 public class Server extends Thread {
 	private List<Session> sessions;
@@ -66,16 +67,17 @@ public class Server extends Thread {
 		while((line = reader.readLine()) != null && !line.isBlank()) {
 			if(request == null) {
 				request = line.split(" ");
+				logger.log(Level.INFO, 
+						"[" + client.getInetAddress().getHostAddress() + "] " + line);
+				
 				if(request.length != 3) {
 					logger.log(Level.WARNING, 
 							"[" + client.getInetAddress().getHostAddress() + "] < Bad request: " + line);
-					var session = new Session(client, request[2]);
+					var session = new Session(client, "HTTP/1.1");
 					session.sendStatus(HttpStatus.BAD_REQUEST);
 					session.complete();
 					return;
 				}
-				logger.log(Level.INFO, 
-						"[" + client.getInetAddress().getHostAddress() + "] " + line);
 				continue;
 			}
 			
@@ -121,8 +123,10 @@ public class Server extends Thread {
 		if(routes.containsKey(route))
 			return Optional.of(routes.get(route));
 		for(var entry : routes.entrySet())
-			if(route.matches(entry.getKey()))
-				return Optional.of(entry.getValue());
+			try {
+				if(route.matches(entry.getKey()))
+					return Optional.of(entry.getValue());
+			} catch(PatternSyntaxException e) { }
 		return Optional.empty();
 	}
 }
