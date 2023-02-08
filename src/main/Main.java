@@ -66,8 +66,21 @@ public class Main {
 			resource = "/index.html";
 		
 		getLogger().log(Level.INFO, "loading template 'frontend" + resource + "'...");
-		session.sendStatus(HttpStatus.OK);
-		session.sendBody(FileUtil.loadTemplate("frontend" + resource, vars));
+		var content = FileUtil.loadTemplate("frontend" + resource, vars);
+		if(content.isPresent()) {
+			session.sendStatus(HttpStatus.OK);
+			session.sendBody(content.get());
+		} else {
+			session.sendStatus(HttpStatus.NOT_FOUND);
+			var errFile = FileUtil.loadTemplate("frontend/error/generic.html", Map.of(
+				"errormsg", () -> "404 File Not Found",
+				"errortitle", () -> "404 Not Found",
+				"redirect", () -> "true"
+			));
+			if(errFile.isPresent())
+				session.sendBody(errFile.get());
+			getLogger().log(Level.WARNING, "404 \"" + resource + "\" Not Found");
+		}
 	}
 	
 	private static String lastURL;	// the url when it was last updated
@@ -90,7 +103,7 @@ public class Main {
 		getLogger().log(Level.DEBUG, "--- begin fetchStreamURL ---");
 		try {
 			var doc = Jsoup.connect("https://iptv.nak.org/public/login").get();
-
+			
 			getLogger().log(Level.DEBUG, "> searching csrf-token");
 			var csrf = doc
 				.selectFirst("form")
@@ -109,7 +122,7 @@ public class Main {
 			post.setEntity(new UrlEncodedFormEntity(List.of(postData)));
 			
 			getLogger().log(Level.DEBUG, "> executing post request");
-
+			
 			@SuppressWarnings("deprecation")
 			var response = client.execute(post);
 			
@@ -131,13 +144,14 @@ public class Main {
 				}
 				var eventURL = btn.attr("href");
 				getLogger().log(Level.DEBUG, "* found event url: " + eventURL);
+				
 				// format: /events/eventID_0/view/eventID_1
 				if(eventURL.contains("/events/")) {
 					var eventIDs = eventURL.substring("/events/".length()).split("\\/view\\/");
 					getLogger().log(Level.DEBUG, "* found event ids(" + eventIDs.length + "):");
 					for(var eventID : eventIDs)
 						getLogger().log(Level.DEBUG, eventID);
-	
+					
 					if(eventIDs.length == 2) {
 						var url = "https://stream1.nac-cdn.org/poster/" + eventIDs[0] + "/" + eventIDs[1] + "/high/index.m3u8";
 						getLogger().log(Level.DEBUG, "* found url(" + url.length() + "): " + url + "\n --- complete ---");
@@ -146,6 +160,7 @@ public class Main {
 					}
 				}
 				
+				// old approach to finding stream url
 				getLogger().log(Level.DEBUG, "> searching stream url in html-response(" + res.length() + ")");
 				var streamURLPattern = Pattern.compile("https:\\/\\/stream\\d\\.nac-cdn\\.org\\/poster\\/([a-fA-F0-9-]+\\/){2}high\\/index\\.m3u8");
 				

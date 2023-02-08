@@ -19,6 +19,13 @@
 	            video.play();
 	        });
 	    }
+
+    	var didJump = false;
+	    video.onplay = (event) => {
+	    	if(!didJump)
+	    		video.currentTime = video.duration - 10;
+	    	didJump = true;
+	    };
     </script>
   </body>
 </html>

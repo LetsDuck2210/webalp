@@ -14,6 +14,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.PatternSyntaxException;
 
+import util.ColorUtil;
+import util.ColorUtil.Prefix;
+import static util.ColorUtil.rst;
+
 public class Server extends Thread {
 	private List<Session> sessions;
 	private Map<String, RouteEndpoint> routes;
@@ -37,18 +41,23 @@ public class Server extends Thread {
 		while(!socket.isClosed()) {
 			try {
 				var client = socket.accept();
-				logger.log(Level.INFO,
-						"connected: " + client.getInetAddress().getHostAddress());
+				logger.log(Level.INFO, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) +
+						"connected: " 
+							+ client.getInetAddress().getHostAddress()
+							+ " | " + client.getInetAddress().getHostName()
+				+ rst());
 				
 				new Thread(() -> {
 					try {
 						handle(client);
 						client.close();
-						logger.log(Level.INFO,
-								"disconnected: " + client.getInetAddress().getHostAddress());
+						logger.log(Level.INFO, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) +
+								"disconnected: " + client.getInetAddress().getHostAddress()
+						+ rst());
 					} catch (IOException e) {
-						logger.log(Level.WARNING, 
-								"I/O Exception: " + e.getMessage());
+						logger.log(Level.WARNING, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) +
+								"I/O Exception: " + e.getMessage()
+						+ rst());
 					}
 				}).start();
 			} catch (IOException e) {
@@ -67,12 +76,14 @@ public class Server extends Thread {
 		while((line = reader.readLine()) != null && !line.isBlank()) {
 			if(request == null) {
 				request = line.split(" ");
-				logger.log(Level.INFO, 
-						"[" + client.getInetAddress().getHostAddress() + "] " + line);
+				logger.log(Level.INFO, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) +
+						"[" + client.getInetAddress().getHostAddress() + "] " + line
+				+ rst());
 				
 				if(request.length != 3) {
-					logger.log(Level.WARNING, 
-							"[" + client.getInetAddress().getHostAddress() + "] < Bad request: " + line);
+					logger.log(Level.WARNING, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) +
+							"[" + client.getInetAddress().getHostAddress() + "] < Bad request: " + line 
+					+ rst());
 					var session = new Session(client, "HTTP/1.1");
 					session.sendStatus(HttpStatus.BAD_REQUEST);
 					session.complete();
@@ -82,8 +93,9 @@ public class Server extends Thread {
 			}
 			
 			if(!line.matches("([A-Za-z-]+):\\s(.+)")) {
-				logger.log(Level.WARNING,
-						"Illegal Header Formatting: " + line);
+				logger.log(Level.WARNING, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) +
+						"Illegal Header Formatting: " + line
+				+ rst());
 				return;
 			}
 			var header = line.split(":");
@@ -98,8 +110,9 @@ public class Server extends Thread {
 		if(!resource.startsWith("/")) {
 			session.sendStatus(HttpStatus.BAD_REQUEST);
 			session.complete();
-			logger.log(Level.WARNING, 
-					"[" + client.getInetAddress().getHostAddress() + "] < Bad request: " + resource);
+			logger.log(Level.WARNING, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) + 
+					"[" + client.getInetAddress().getHostAddress() + "] < Bad request: " + resource
+			+ rst());
 			return;
 		}
 		
