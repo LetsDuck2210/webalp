@@ -43,7 +43,7 @@ public class Session {
 	/**
 	 * sends a status code with http version to the client
 	 * @param status the http status code
-	 * @throws IOException If an I/O error occurs
+	 * @throws IOException If an I/O error occurs (e.g. the client disconnects)
 	 * @throws IllegalStateException If the status has already been set before or the session has been disposed
 	 * */
 	public void sendStatus(HttpStatus status) throws IOException {
@@ -57,7 +57,7 @@ public class Session {
 	}
 	/**
 	 * sends a header to the client
-	 * @throws IOException If an I/O error occurs
+	 * @throws IOException If an I/O error occurs (e.g. the client disconnects)
 	 * @throws IllegalStateException If the status hasn't been set or the session has been disposed
 	 * */
 	public void sendHeader(String key, String value) throws IOException {
@@ -69,7 +69,7 @@ public class Session {
 	}
 	/**
 	 * sends the body of the response to the client
-	 * @throws IOException If an I/O error occurs
+	 * @throws IOException If an I/O error occurs (e.g. the client disconnects)
 	 * @throws IllegalStateException If the status hasn't been set or the session has been disposed
 	 * */
 	public void sendBody(String body) throws IOException {
@@ -83,7 +83,7 @@ public class Session {
 	/**
 	 * completes the transaction and disposes this session
 	 * 
-	 * @throws IOException If an I/O error occurs
+	 * @throws IOException If an I/O error occurs (e.g. the client disconnects)
 	 * @throws IllegalStateException If the session has already been disposed
 	 * */
 	public void complete() throws IOException {
