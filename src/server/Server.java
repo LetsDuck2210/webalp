@@ -12,6 +12,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.PatternSyntaxException;
+
+import util.ColorUtil;
+import util.ColorUtil.Prefix;
+import static util.ColorUtil.rst;
 
 public class Server extends Thread {
 	private List<Session> sessions;
@@ -36,18 +41,23 @@ public class Server extends Thread {
 		while(!socket.isClosed()) {
 			try {
 				var client = socket.accept();
-				logger.log(Level.INFO,
-						"connected: " + client.getInetAddress().getHostAddress());
+				logger.log(Level.INFO, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) +
+						"connected: " 
+							+ client.getInetAddress().getHostAddress()
+							+ " | " + client.getInetAddress().getHostName()
+				+ rst());
 				
 				new Thread(() -> {
 					try {
 						handle(client);
 						client.close();
-						logger.log(Level.INFO,
-								"disconnected: " + client.getInetAddress().getHostAddress());
+						logger.log(Level.INFO, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) +
+								"disconnected: " + client.getInetAddress().getHostAddress()
+						+ rst());
 					} catch (IOException e) {
-						logger.log(Level.WARNING, 
-								"I/O Exception: " + e.getMessage());
+						logger.log(Level.WARNING, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) +
+								"I/O Exception: " + e.getMessage()
+						+ rst());
 					}
 				}).start();
 			} catch (IOException e) {
@@ -66,22 +76,26 @@ public class Server extends Thread {
 		while((line = reader.readLine()) != null && !line.isBlank()) {
 			if(request == null) {
 				request = line.split(" ");
+				logger.log(Level.INFO, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) +
+						"[" + client.getInetAddress().getHostAddress() + "] " + line
+				+ rst());
+				
 				if(request.length != 3) {
-					logger.log(Level.WARNING, 
-							"[" + client.getInetAddress().getHostAddress() + "] < Bad request: " + line);
-					var session = new Session(client, request[2]);
+					logger.log(Level.WARNING, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) +
+							"[" + client.getInetAddress().getHostAddress() + "] < Bad request: " + line 
+					+ rst());
+					var session = new Session(client, "HTTP/1.1");
 					session.sendStatus(HttpStatus.BAD_REQUEST);
 					session.complete();
 					return;
 				}
-				logger.log(Level.INFO, 
-						"[" + client.getInetAddress().getHostAddress() + "] " + line);
 				continue;
 			}
 			
 			if(!line.matches("([A-Za-z-]+):\\s(.+)")) {
-				logger.log(Level.WARNING,
-						"Illegal Header Formatting: " + line);
+				logger.log(Level.WARNING, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) +
+						"Illegal Header Formatting: " + line
+				+ rst());
 				return;
 			}
 			var header = line.split(":");
@@ -90,15 +104,15 @@ public class Server extends Thread {
 		if(request == null)
 			return;
 		
-		var method = request[0];
+		var httpVersion = request[0];
 		var resource = request[1];
-		var httpVersion = request[2];
-		var session = new Session(client, httpVersion);
-		if(!resource.startsWith("/") || !method.matches("[A-Z]+")) {
+		var session = new Session(client, request[2]);
+		if(!resource.startsWith("/")) {
 			session.sendStatus(HttpStatus.BAD_REQUEST);
 			session.complete();
-			logger.log(Level.WARNING, 
-					"[" + client.getInetAddress().getHostAddress() + "] < Bad request");
+			logger.log(Level.WARNING, ColorUtil.fromIP(client.getInetAddress(), Prefix.BACKGROUND) + 
+					"[" + client.getInetAddress().getHostAddress() + "] < Bad request: " + resource
+			+ rst());
 			return;
 		}
 		
@@ -107,7 +121,7 @@ public class Server extends Thread {
 		getRoute(resource)
 			.orElseGet(() -> (m,r,s) -> s.sendStatus(HttpStatus.NOT_FOUND))
 			.handle(
-				method,
+				httpVersion,
 				resource,
 				session
 			);
@@ -122,8 +136,10 @@ public class Server extends Thread {
 		if(routes.containsKey(route))
 			return Optional.of(routes.get(route));
 		for(var entry : routes.entrySet())
-			if(route.matches(entry.getKey()))
-				return Optional.of(entry.getValue());
+			try {
+				if(route.matches(entry.getKey()))
+					return Optional.of(entry.getValue());
+			} catch(PatternSyntaxException e) { }
 		return Optional.empty();
 	}
 }
