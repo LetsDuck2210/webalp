@@ -127,8 +127,7 @@ public class Main {
 			var response = client.execute(post);
 			
 			if(response.getEntity() != null) {
-				String res = "";
-				String streamURL;
+				String res = "", url = "";
 				getLogger().log(Level.DEBUG, "> reading html-response");
 				try(var in = 
 						new BufferedReader( 
@@ -136,51 +135,71 @@ public class Main {
 					while(in.ready())
 						res += (char) in.read();
 				}
-				var dashboard = Jsoup.parse(res);
-				var btn = dashboard.selectFirst("a.selectbutton");
-				if(btn == null) {
-					getLogger().log(Level.WARNING, "selectbutton is null! (this is probably because the login failed); dumping html: \n" + res);
-					return Optional.empty();
-				}
-				var eventURL = btn.attr("href");
-				getLogger().log(Level.DEBUG, "* found event url: " + eventURL);
 				
-				// format: /events/eventID_0/view/eventID_1
-				if(eventURL.contains("/events/")) {
-					var eventIDs = eventURL.substring("/events/".length()).split("\\/view\\/");
-					getLogger().log(Level.DEBUG, "* found event ids(" + eventIDs.length + "):");
-					for(var eventID : eventIDs)
-						getLogger().log(Level.DEBUG, eventID);
+				getLogger().log(Level.DEBUG, "> searching url in html-response(" + res.length() + ")");
+				var cdnURL = getCdnURL(res);
+				if(cdnURL.isEmpty()) {
+					var eventURL = getEventURL(res);
 					
-					if(eventIDs.length == 2) {
-						var url = "https://stream1.nac-cdn.org/poster/" + eventIDs[0] + "/" + eventIDs[1] + "/high/index.m3u8";
-						getLogger().log(Level.DEBUG, "* found url(" + url.length() + "): " + url + "\n --- complete ---");
-						lastURL = url;
-						return Optional.of(url);
+					if(eventURL.isEmpty()) {
+						getLogger().log(Level.WARNING, "* No url found! Dumping html");
+						getLogger().log(Level.WARNING, res);
 					}
+					
+					return eventURL;
 				}
+				lastURL = cdnURL.get();
 				
-				// old approach to finding stream url
-				getLogger().log(Level.DEBUG, "> searching stream url in html-response(" + res.length() + ")");
-				var streamURLPattern = Pattern.compile("https:\\/\\/stream\\d\\.nac-cdn\\.org\\/poster\\/([a-fA-F0-9-]+\\/){2}high\\/index\\.m3u8");
-				
-				var matcher = streamURLPattern.matcher(res);
-				if(!matcher.find()) {
-					getLogger().log(Level.WARNING, "* No stream url found! Dumping html");
-					getLogger().log(Level.WARNING, res);
-					return Optional.empty();
-				}
-				
-				streamURL = res.substring(matcher.start(), matcher.end());
+				getLogger().log(Level.DEBUG, "* found url(" + lastURL.length() + "): " + lastURL);
 				getLogger().log(Level.DEBUG, "--- complete ---");
-				getLogger().log(Level.DEBUG, "* found url(" + streamURL.length() + "): " + streamURL);
-				lastURL = streamURL;
-				return Optional.of(streamURL);
+				return Optional.of(url);
 			} else
 				getLogger().log(Level.WARNING, "* could not create response-entity");
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		return Optional.empty();
+	}
+	
+	private static Optional<String> getCdnURL(String html) {
+		var streamURLPattern = Pattern.compile("\\/encoder-[0-9a-fA-F-\\/]+\\.m3u8");
+		var cdnURLPattern = Pattern.compile("https:\\/\\/cdn-[0-9a-fA-F-\\\\/]+\\.cloud\\.nac-cdn\\.org");
+		
+		var streamURLmatcher = streamURLPattern.matcher(html);
+		var cdnURLmatcher = cdnURLPattern.matcher(html);
+		if(!streamURLmatcher.find() || !cdnURLmatcher.find())
+			return Optional.empty();
+		
+		var streamURL = html.substring(streamURLmatcher.start(), streamURLmatcher.end());
+		var cdnURL = html.substring(cdnURLmatcher.start(), cdnURLmatcher.end());
+		var url = cdnURL + streamURL;
+		return Optional.of(url);
+	}
+	private static Optional<String> getEventURL(String html) {
+		var dashboard = Jsoup.parse(html);
+		var btn = dashboard.selectFirst("a.selectbutton");
+		if(btn == null) {
+			getLogger().log(Level.WARNING, "selectbutton is null! (this is probably because the login failed); dumping html: \n" + html);
+			return Optional.empty();
+		}
+		
+		var eventURL = btn.attr("href");
+		getLogger().log(Level.DEBUG, "* found event url: " + eventURL);
+		// format: /events/eventID_0/view/eventID_1
+		if(eventURL.contains("/events/")) {
+			var eventIDs = eventURL.substring("/events/".length()).split("\\/view\\/");
+			getLogger().log(Level.DEBUG, "* found event ids(" + eventIDs.length + "):");
+			for(var eventID : eventIDs)
+				getLogger().log(Level.DEBUG, eventID);
+			
+			if(eventIDs.length == 2) {
+				var url = "https://stream1.nac-cdn.org/poster/" + eventIDs[0] + "/" + eventIDs[1] + "/high/index.m3u8";
+				getLogger().log(Level.DEBUG, "* found url(" + url.length() + "): " + url + "\n --- complete ---");
+				lastURL = null;
+				return Optional.of(url);
+			}
+		}
+		
 		return Optional.empty();
 	}
 }
